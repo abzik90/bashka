@@ -2,7 +2,7 @@ import asyncio
 from faster_whisper import WhisperModel
 from ollama import AsyncClient 
 
-TRANSCRIPTION_FILE = "temp.mp3"
+TRANSCRIPTION_FILE = "listen.wav"
 
 class CyberMind:
     def __init__(self, model_size = "large-v3", llm_model = "llama3"):
@@ -64,8 +64,9 @@ class CyberMind:
         passed_function(buffer) if buffer else None
     def run_all(self):
         transcribed_text = self.transcribe()
-        print(transcribed_text)
+        print("Transcribed:", transcribed_text)
         # transcribed_text = "привет, как дела?"
+        print("Generated:")
         asyncio.run(self.send_prompt(transcribed_text))
         print("="*40)
     

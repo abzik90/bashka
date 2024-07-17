@@ -1,17 +1,23 @@
 from classes.CyberMind import CyberMind
-import asyncio
+from classes.SpeechDetector import SpeechDetector
+import threading, time
+import os.path
 
 head = CyberMind(llm_model="bambucha/saiga-llama3")
-
+detector = SpeechDetector() 
 
 def main():
-    try:
-        head.run_all()
-        head.stop()
-    except KeyboardInterrupt:
-        head.stop()
+    print(id(head))
+    thread = threading.Thread(target=detector.run, args=(head,5,))
+    thread.daemon = True
+    thread.start()
 
+    print("Daemon is still running")
+    while True:
+        pass
+ 
 if __name__ == "__main__":
     main()
+    # head.run_all()
     
 
