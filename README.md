@@ -32,4 +32,8 @@
     sudo cp libcudnn_ops_infer.so.8 /usr/local/cuda-12.5/lib64
     sudo cp libcudnn_cnn_infer.so.8 /usr/local/cuda-12.5/lib64/
     sudo cp libcublasLt.so.11 /usr/local/cuda-12.5/lib64/
-    sudo cp libcublas.so.11 /usr/local/cuda-12.5/lib64/```
+    sudo cp libcublas.so.11 /usr/local/cuda-12.5/lib64/
+    sudo cp libcudnn.so.8 /usr/local/cuda-12.5/lib64/
+    sudo cp libcufft.so.10 /usr/local/cuda-12.5/lib64/
+    sudo cp libcudart.so.11.0 /usr/local/cuda-12.5/lib64/
+    ```

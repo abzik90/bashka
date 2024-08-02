@@ -1,18 +1,17 @@
 from classes.CyberMind import CyberMind
 from classes.SpeechDetector import SpeechDetector
-import threading, time
-import os.path
+import threading
 
 head = CyberMind(llm_model="bambucha/saiga-llama3")
 detector = SpeechDetector() 
 
 def main():
     print(id(head))
-    thread = threading.Thread(target=detector.run, args=(head,5,))
+    thread = threading.Thread(target=detector.record_audio, args=(head,))
     thread.daemon = True
     thread.start()
 
-    print("Daemon is still running")
+    print("Daemon is running")
     while True:
         pass
  

@@ -28,7 +28,7 @@ class SpeechDetector:
 
         return audio_data
 
-    def record_audio(self, buffer_size = 10):
+    def record_audio(self, head, buffer_size = 10):
         stream = self.p.open(format=pyaudio.paInt16,
                             channels=1,
                             rate=self.sample_rate,
@@ -73,9 +73,10 @@ class SpeechDetector:
                 if threshold > 0.01 and time.time() - start_time < self.max_delay:
                     print("recording...")
                     audio_data.append(self.frames[-1])
-                elif audio_data:
+                elif audio_data and len(audio_data)/(self.sample_rate / self.window_size) > self.max_delay:
                     print(f"A new file has been saved with length {len(audio_data)/(self.sample_rate / self.window_size)} seconds")
                     self.write_wav(audio_data)
+                    head.run_all()
                     audio_data = []
                 # 2 * 10^-6 s
                 if len(self.frames) > max_frames: 
@@ -89,8 +90,8 @@ class SpeechDetector:
         stream.stop_stream()
         stream.close()
 
-    def record_in_thread(self):
-        thread = threading.Thread(target=self.record_audio)
+    def record_in_thread(self, head):
+        thread = threading.Thread(target=self.record_audio, args = (head,))
         thread.daemon = True
         thread.start()
         return thread
