@@ -17,7 +17,7 @@ class CyberMind:
             api_key (str): The API key required for authentication with the OpenAI API.
             audio_filename (str): The location of the temporary audio file to be transcribed.
         """
-        # self.transcription_model = WhisperModel(model_size, device="cpu", compute_type="int8") # int8_float16
+        # self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="int8_float16") # int8_float16
         self.llm_model = llm_model
         self.tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(DEVICE)
 

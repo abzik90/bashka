@@ -20,5 +20,8 @@ def main():
 if __name__ == "__main__":
     main()
     # head.run_all()
-    
+     # print(id(head))
+    # thread = threading.Thread(target=detector.record_audio, args=(head,))
+    # thread.daemon = True
+    # thread.start()
 

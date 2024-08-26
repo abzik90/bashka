@@ -16,7 +16,7 @@ def main():
         pass
  
 if __name__ == "__main__":
-    main()
-    # head.run_all()
+    # main()
+    head.run_all()
     
 
