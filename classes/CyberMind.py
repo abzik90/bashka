@@ -4,11 +4,16 @@ from ollama import AsyncClient
 import sounddevice as sd
 from TTS.api import TTS
 
+import serial
+import numpy as np
+
 DEVICE = "cuda" # if torch.cuda.is_available() else "cpu"
 TRANSCRIPTION_FILE = "speech.wav"
+SERIAL_PORT = '/dev/ttyUSB0'
+LIP_FPS = 15
 
 class CyberMind:
-    def __init__(self, model_size = "large-v3", llm_model = "llama3", tts_model = "ru_RU-dmitri-medium.onnx", tts_config = "ru_RU-dmitri-medium.onnx.json"):
+    def __init__(self, model_size = "faster-whisper-medium", llm_model = "llama3", tts_model = "ru_RU-dmitri-medium.onnx", tts_config = "ru_RU-dmitri-medium.onnx.json"):
         """
         Constructor for initializing the Voice Assistant instance.
         Utilizes CUDA for Faster-whisper local instance
@@ -17,17 +22,29 @@ class CyberMind:
             api_key (str): The API key required for authentication with the OpenAI API.
             audio_filename (str): The location of the temporary audio file to be transcribed.
         """
-        # self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="int8_float16") # int8_float16
+        self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="float16") # int8_float16
         self.llm_model = llm_model
         self.tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(DEVICE)
+        self.ser = serial.Serial(SERIAL_PORT, 9600)
 
     def print_response(self, response):
         print(response, end="\n", flush=True)
 
+    def set_servo(self, angle, servo_number = 1):
+        command = f'{servo_number}{angle}\n'
+        self.ser.write(command.encode())
+
+    def lipsync(self, wav):
+        for start_idx in range(0, len(wav), 22050 / LIP_FPS):
+            end_idx = start_idx + 22050 // LIP_FPS 
+            amplitude = np.abs(wav[start_idx:end_idx]).mean() / 22050.0
+            self.set_servo(amplitude * 90)
     def tts(self, response):
         print(response, end="\n", flush=True)
         wav = self.tts_model.tts(text=response, speaker_wav="./speech.wav", language="ru", speed=1.5)
+        
         sd.play(wav, samplerate=22050)
+        self.lipsync()
         sd.wait()  # Wait until the audio is finished playing
 
     def transcribe(self, lang_code = "ru"):
@@ -73,10 +90,9 @@ class CyberMind:
         passed_function(buffer) if buffer else None
         # passed_function(response)
     def run_all(self):
-        # transcribed_text = self.transcribe()
-        transcribed_text = "Расскажи мне анекдот про сталкера в пару предложений"
+        transcribed_text = self.transcribe()
+        # transcribed_text = "Расскажи мне анекдот про сталкера в пару предложений"
         print("Transcribed:", transcribed_text)
-        # transcribed_text = "привет, как дела?"
         print("Generated:")
         asyncio.run(self.send_prompt(transcribed_text, self.tts))
         print("="*40)
