@@ -4,3 +4,5 @@ faster_whisper
 asyncio
 ollama
 TTS
+sounddevice
+pyserial

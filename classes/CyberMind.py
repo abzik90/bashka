@@ -13,7 +13,7 @@ SERIAL_PORT = '/dev/ttyUSB0'
 LIP_FPS = 15
 
 class CyberMind:
-    def __init__(self, model_size = "faster-whisper-medium", llm_model = "llama3", tts_model = "ru_RU-dmitri-medium.onnx", tts_config = "ru_RU-dmitri-medium.onnx.json"):
+    def __init__(self, model_size = "large-v1", llm_model = "llama3"):
         """
         Constructor for initializing the Voice Assistant instance.
         Utilizes CUDA for Faster-whisper local instance
@@ -22,9 +22,12 @@ class CyberMind:
             api_key (str): The API key required for authentication with the OpenAI API.
             audio_filename (str): The location of the temporary audio file to be transcribed.
         """
-        self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="float16") # int8_float16
+        self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="int8_float16") # int8_float16
+        print("Whisper model initialized successfully")
         self.llm_model = llm_model
         self.tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(DEVICE)
+        print("Text-to-speech model initialized successfully")
+
         self.ser = serial.Serial(SERIAL_PORT, 9600)
 
     def print_response(self, response):
@@ -44,7 +47,7 @@ class CyberMind:
         wav = self.tts_model.tts(text=response, speaker_wav="./speech.wav", language="ru", speed=1.5)
         
         sd.play(wav, samplerate=22050)
-        self.lipsync()
+        # self.lipsync()
         sd.wait()  # Wait until the audio is finished playing
 
     def transcribe(self, lang_code = "ru"):
@@ -93,6 +96,7 @@ class CyberMind:
         transcribed_text = self.transcribe()
         # transcribed_text = "Расскажи мне анекдот про сталкера в пару предложений"
         print("Transcribed:", transcribed_text)
+        # self.tts(transcribed_text)
         print("Generated:")
         asyncio.run(self.send_prompt(transcribed_text, self.tts))
         print("="*40)

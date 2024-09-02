@@ -70,7 +70,7 @@ class SpeechDetector:
                 # 6-7 * 10^-6 s
                 if buffer[-1] > threshold:
                     start_time = time.time()
-                if threshold > 40 and time.time() - start_time < self.max_delay:
+                if threshold > 0.5 and time.time() - start_time < self.max_delay:
                     print("recording...")
                     audio_data.append(self.frames[-1])
                 elif audio_data and len(audio_data)/(self.sample_rate / self.window_size) > self.max_delay:

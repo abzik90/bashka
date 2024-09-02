@@ -4,7 +4,7 @@ import time
 model_size = "large-v1"
 
 # Run on GPU with FP16
-model = WhisperModel(model_size, device="cuda", compute_type="float16")
+model = WhisperModel(model_size, device="cuda", compute_type="int8_float16")
 
 # or run on GPU with INT8
 # model = WhisperModel(model_size, device="cuda", compute_type="int8_float16")
@@ -29,8 +29,8 @@ def transcribe(file, lang_code = "ru"):
     return " ".join(transcribed)
     
 
-transcribe("source-aga.wav")
+transcribe("./sources/source-aga.wav")
 time.sleep(7)
-transcribe("source-igor.wav")
+transcribe("./sources/source-igor.wav")
 time.sleep(7)
-transcribe("source-asset.wav")
+transcribe("./sources/source-asset.wav")
