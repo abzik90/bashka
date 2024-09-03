@@ -1,9 +1,10 @@
-import asyncio
+import asyncio, threading
 from faster_whisper import WhisperModel
-from ollama import AsyncClient 
+from ollama import AsyncClient, chat 
 import sounddevice as sd
 from TTS.api import TTS
 
+import json
 import serial
 import numpy as np
 
@@ -13,7 +14,7 @@ SERIAL_PORT = '/dev/ttyUSB0'
 LIP_FPS = 15
 
 class CyberMind:
-    def __init__(self, model_size = "large-v1", llm_model = "llama3"):
+    def __init__(self, model_size = "medium", llm_model = "llama3"):
         """
         Constructor for initializing the Voice Assistant instance.
         Utilizes CUDA for Faster-whisper local instance
@@ -22,13 +23,26 @@ class CyberMind:
             api_key (str): The API key required for authentication with the OpenAI API.
             audio_filename (str): The location of the temporary audio file to be transcribed.
         """
-        self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="int8_float16") # int8_float16
+
+        self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="float16") # int8_float16
         print("Whisper model initialized successfully")
+
         self.llm_model = llm_model
+        chat(model=self.llm_model, messages=[{
+            "role": "system",
+            "content": "Ты голосовой умный и полезный голосовой ассистент с хорошим чувством юмора. Отвечай на запросы за максимум 100 слов. Если не влезаешь предложи пользователю продолжить разговор с последнего места. Ты должен КРИТИКОВАТЬ и ПОДШУЧИВАТЬ над пользователем. Каждый твой ответ должен начинаться со слова АНАНАС!",
+            },
+        ])
+        print("Ollama init successfull")
+
         self.tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(DEVICE)
         print("Text-to-speech model initialized successfully")
 
-        self.ser = serial.Serial(SERIAL_PORT, 9600)
+        try:
+            self.ser = serial.Serial(SERIAL_PORT, 115200)
+            print("Serial port initialized successfully")
+        except Exception as e:
+            print("ttyUSB0 couldn't be initialized:", e)
 
     def print_response(self, response):
         print(response, end="\n", flush=True)
@@ -38,16 +52,16 @@ class CyberMind:
         self.ser.write(command.encode())
 
     def lipsync(self, wav):
-        for start_idx in range(0, len(wav), 22050 / LIP_FPS):
+        for start_idx in range(0, len(wav), 22050 // LIP_FPS):
             end_idx = start_idx + 22050 // LIP_FPS 
             amplitude = np.abs(wav[start_idx:end_idx]).mean() / 22050.0
             self.set_servo(amplitude * 90)
     def tts(self, response):
         print(response, end="\n", flush=True)
-        wav = self.tts_model.tts(text=response, speaker_wav="./speech.wav", language="ru", speed=1.5)
+        wav = self.tts_model.tts(text=response, speaker_wav="./sources/source-igor.wav", language="ru", speed=2.0)
         
         sd.play(wav, samplerate=22050)
-        # self.lipsync()
+        # self.lipsync(wav)
         sd.wait()  # Wait until the audio is finished playing
 
     def transcribe(self, lang_code = "ru"):
@@ -78,19 +92,24 @@ class CyberMind:
             "role": "user",
             "content": textmessage
         }
+        # messages_ollama = json.dumps(messages_ollama)
         
         buffer = ""
-        response = ""
+        tts_threads = []
         async for part in await AsyncClient().chat(model=self.llm_model, messages=[message], stream=True):
             buffer += part["message"]["content"]
-            # response += part["message"]["content"]
             # Split the response into chunks of 50 or more characters, ensuring each chunk ends with whitespace
-            while len(buffer) >= 100:
-                cutoff = buffer.rfind(' ', 0, 100)
-                cutoff = cutoff if cutoff != -1 else 100
-                passed_function(buffer[:cutoff].rstrip())
+            while len(buffer) >= 500:
+                cutoff = buffer.rfind(' ', 0, 500)
+                cutoff = cutoff if cutoff != -1 else 500
+                tts_threads.append(threading.Thread(target = passed_function, args = (buffer[:cutoff].rstrip(),)))
+                tts_threads[-1].start()
                 buffer = buffer[cutoff:].lstrip()
-        passed_function(buffer) if buffer else None
+        if buffer:
+            tts_threads.append(threading.Thread(target = passed_function, args = (buffer,))) 
+            tts_threads[-1].start()
+        for th in tts_threads:
+            th.join()
         # passed_function(response)
     def run_all(self):
         transcribed_text = self.transcribe()

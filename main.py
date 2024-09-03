@@ -2,7 +2,7 @@ from classes.CyberMind import CyberMind
 from classes.SpeechDetector import SpeechDetector
 import threading
 
-head = CyberMind(llm_model="bambucha/saiga-llama3")
+head = CyberMind(llm_model="llama3.1:8b")
 detector = SpeechDetector() 
 
 def main():

@@ -5,7 +5,7 @@ import wave
 import numpy as np
 
 class SpeechDetector:
-    def __init__(self, sample_rate=16000, window_size=1024, max_delay = 2, duration = 4):
+    def __init__(self, sample_rate=16000, window_size=1024, max_delay = 1.5, duration = 4):
         self.sample_rate = sample_rate
         self.window_size = window_size
         self.duration = duration
@@ -70,7 +70,7 @@ class SpeechDetector:
                 # 6-7 * 10^-6 s
                 if buffer[-1] > threshold:
                     start_time = time.time()
-                if threshold > 0.5 and time.time() - start_time < self.max_delay:
+                if threshold > 0.2 and time.time() - start_time < self.max_delay:
                     print("recording...")
                     audio_data.append(self.frames[-1])
                 elif audio_data and len(audio_data)/(self.sample_rate / self.window_size) > self.max_delay:
