@@ -2,7 +2,7 @@ from classes.CyberMind import CyberMind
 from classes.SpeechDetector import SpeechDetector
 import threading
 
-head = CyberMind(llm_model="llama3.1:8b")
+head = CyberMind()
 detector = SpeechDetector() 
 
 def main():
@@ -18,7 +18,7 @@ def main():
         detector.record_audio(head=head)
  
 if __name__ == "__main__":
-    main()
-    # head.run_all()
+    # main()
+    head.run_all()
     
 

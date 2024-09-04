@@ -1,6 +1,6 @@
 import asyncio, threading
 from faster_whisper import WhisperModel
-from ollama import AsyncClient, chat 
+from classes.StreamResponse import StreamResponse
 import sounddevice as sd
 from TTS.api import TTS
 
@@ -14,7 +14,7 @@ SERIAL_PORT = '/dev/ttyUSB0'
 LIP_FPS = 15
 
 class CyberMind:
-    def __init__(self, model_size = "medium", llm_model = "llama3"):
+    def __init__(self, model_size = "large-v1"):
         """
         Constructor for initializing the Voice Assistant instance.
         Utilizes CUDA for Faster-whisper local instance
@@ -27,13 +27,8 @@ class CyberMind:
         self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="float16") # int8_float16
         print("Whisper model initialized successfully")
 
-        self.llm_model = llm_model
-        chat(model=self.llm_model, messages=[{
-            "role": "system",
-            "content": "Ты голосовой умный и полезный голосовой ассистент с хорошим чувством юмора. Отвечай на запросы за максимум 100 слов. Если не влезаешь предложи пользователю продолжить разговор с последнего места. Ты должен КРИТИКОВАТЬ и ПОДШУЧИВАТЬ над пользователем. Каждый твой ответ должен начинаться со слова АНАНАС!",
-            },
-        ])
-        print("Ollama init successfull")
+        self.llama = StreamResponse()
+        print("LLM studio init successfull")
 
         self.tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(DEVICE)
         print("Text-to-speech model initialized successfully")
@@ -52,7 +47,7 @@ class CyberMind:
         self.ser.write(command.encode())
 
     def lipsync(self, wav):
-        for start_idx in range(0, len(wav), 22050 // LIP_FPS):
+        for start_idx in range(0, len(wav), (22050 // LIP_FPS)):
             end_idx = start_idx + 22050 // LIP_FPS 
             amplitude = np.abs(wav[start_idx:end_idx]).mean() / 22050.0
             self.set_servo(amplitude * 90)
@@ -80,7 +75,7 @@ class CyberMind:
              
     async def send_prompt(self, textmessage, passed_function = print_response):
         """
-        Ollama response generation. Will run the function passed with the generated response
+        LLM studio response generation. Will run the function passed with the generated response
 
         Args:
             textmessage (str): Text message as prompt
@@ -92,16 +87,14 @@ class CyberMind:
             "role": "user",
             "content": textmessage
         }
-        # messages_ollama = json.dumps(messages_ollama)
-        
         buffer = ""
         tts_threads = []
-        async for part in await AsyncClient().chat(model=self.llm_model, messages=[message], stream=True):
-            buffer += part["message"]["content"]
+        for part in self.llama.chat(message):
+            buffer += part
             # Split the response into chunks of 50 or more characters, ensuring each chunk ends with whitespace
-            while len(buffer) >= 500:
-                cutoff = buffer.rfind(' ', 0, 500)
-                cutoff = cutoff if cutoff != -1 else 500
+            while len(buffer) >= 100:
+                cutoff = buffer.rfind(' ', 0, 100)
+                cutoff = cutoff if cutoff != -1 else 100
                 tts_threads.append(threading.Thread(target = passed_function, args = (buffer[:cutoff].rstrip(),)))
                 tts_threads[-1].start()
                 buffer = buffer[cutoff:].lstrip()
@@ -112,8 +105,8 @@ class CyberMind:
             th.join()
         # passed_function(response)
     def run_all(self):
-        transcribed_text = self.transcribe()
-        # transcribed_text = "Расскажи мне анекдот про сталкера в пару предложений"
+        # transcribed_text = self.transcribe()
+        transcribed_text = "Расскажи мне анекдот про сталкера в пару предложений"
         print("Transcribed:", transcribed_text)
         # self.tts(transcribed_text)
         print("Generated:")

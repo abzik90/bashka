@@ -99,13 +99,13 @@ class SpeechDetector:
     def __del__(self):
         self.p.terminate()
         
-if __name__ == "__main__":
-    # Start recording in a daemon thread
-    sd = SpeechDetector()
-    record_thread = sd.record_in_thread()
+# if __name__ == "__main__":
+#     # Start recording in a daemon thread
+#     sd = SpeechDetector()
+#     record_thread = sd.record_in_thread()
 
-    try:
-        while record_thread.is_alive():
-            pass
-    except KeyboardInterrupt:
-        print("Main thread interrupted. Exiting...")
+#     try:
+#         while record_thread.is_alive():
+#             pass
+#     except KeyboardInterrupt:
+#         print("Main thread interrupted. Exiting...")
