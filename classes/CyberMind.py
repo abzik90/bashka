@@ -1,89 +1,119 @@
-import openai
-import threading
-from .EventHandler import EventHandler
-from .HeadListen import HeadListen
-import os
+import asyncio, threading
+from faster_whisper import WhisperModel
+from classes.StreamResponse import StreamResponse
+import sounddevice as sd
+from TTS.api import TTS
 
-semaphore = threading.Semaphore(1)
+import json
+import serial
+import numpy as np
+
+DEVICE = "cuda" # if torch.cuda.is_available() else "cpu"
+TRANSCRIPTION_FILE = "speech.wav"
+SERIAL_PORT = '/dev/ttyUSB0'
+LIP_FPS = 15
 
 class CyberMind:
-    def __init__(self, api_key, audio_filename):
+    def __init__(self, model_size = "large-v1"):
         """
-        Constructor for initializing the class instance.
+        Constructor for initializing the Voice Assistant instance.
+        Utilizes CUDA for Faster-whisper local instance
 
         Args:
             api_key (str): The API key required for authentication with the OpenAI API.
             audio_filename (str): The location of the temporary audio file to be transcribed.
         """
-        openai.api_key = api_key
-        self.audio_filename = audio_filename
-        self.client = openai.OpenAI()
-        self.assistant = self.client.beta.assistants.create(
-                    instructions=f"Ты являешься голосовым ассистентом внутри гуманойдного робота. Тебе будут предоставляться транскрипты аудиофайлов полученные по whisper. Твоя задача коротко и ясно отвечать пользователю на его запросы в 3-4 предложениях",
-                    name="bashka",
-                    tools=[{"type": "code_interpreter"}],
-                    model="gpt-4o",
-        )
-        self.thread = self.client.beta.threads.create()
-        self.output_counter = 1
 
-    def transcribe(self):
+        self.transcription_model = WhisperModel(model_size, device=DEVICE, compute_type="float16") # int8_float16
+        print("Whisper model initialized successfully")
+
+        self.llama = StreamResponse()
+        print("LLM studio init successfull")
+
+        self.tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(DEVICE)
+        print("Text-to-speech model initialized successfully")
+
+        try:
+            self.ser = serial.Serial(SERIAL_PORT, 115200)
+            print("Serial port initialized successfully")
+        except Exception as e:
+            print("ttyUSB0 couldn't be initialized:", e)
+
+    def print_response(self, response):
+        print(response, end="\n", flush=True)
+
+    def set_servo(self, angle, servo_number = 1):
+        command = f'{servo_number}{angle}\n'
+        self.ser.write(command.encode())
+
+    def lipsync(self, wav):
+        for start_idx in range(0, len(wav), (22050 // LIP_FPS)):
+            end_idx = start_idx + 22050 // LIP_FPS 
+            amplitude = np.abs(wav[start_idx:end_idx]).mean() / 22050.0
+            self.set_servo(amplitude * 90)
+    def tts(self, response):
+        print(response, end="\n", flush=True)
+        wav = self.tts_model.tts(text=response, speaker_wav="./sources/source-igor.wav", language="ru", speed=2.0)
+        
+        sd.play(wav, samplerate=22050)
+        # self.lipsync(wav)
+        sd.wait()  # Wait until the audio is finished playing
+
+    def transcribe(self, lang_code = "ru"):
         """
-        Whisper API Transcription method.
-
+        Local Faster-Whisper API Transcription method.
+        Args:
+            lang_code (str): 2 character language code for transcription(Russian by default)
         Returns:
             str: Transcribed text from the audio file
         """
-        audio_file= open(self.audio_filename, "rb")
-        return self.client.audio.transcriptions.create(
-            model="whisper-1", 
-            file=audio_file
-        )
+        segments, info = self.transcription_model.transcribe(TRANSCRIPTION_FILE, beam_size=5, language=lang_code)
+        print("Detected language '%s' with probability %f" % (info.language, info.language_probability))
 
-    def send_prompt(self):
+        transcribed = (segment.text for segment in segments)
+        return " ".join(transcribed)
+             
+    async def send_prompt(self, textmessage, passed_function = print_response):
         """
-        OpenAI API for response generation.
+        LLM studio response generation. Will run the function passed with the generated response
 
-        Yields:
-            str: Streams the response text generated from the OpenAI API response
-        Returns:
-            str: Full response
+        Args:
+            textmessage (str): Text message as prompt
+            passed_function (function, optional): A function to handle the generated response.
+                Defaults to print_response if not provided.
         """
-        transcribed_text = self.transcribe()
-        print("Transcribed text:", transcribed_text)
-        message = self.client.beta.threads.messages.create(
-            thread_id = self.thread.id,
-            role = "user",
-            content = f"Ответь на последующую транскрипцию: {transcribed_text}",
-        )
 
-        with self.client.beta.threads.runs.stream(
-            thread_id=self.thread.id,
-            assistant_id=self.assistant.id,
-            event_handler=EventHandler(),
-        ) as stream:
-            # stream.until_done()
-            for event in stream:
-                if event.event == 'thread.message.delta':
-                    yield event.data.delta.content[0].text.value
-
-    def listens(self):
-        """
-        Listen for spacebar key press(hold) and release
-        Record audio during the key hold
-
-        Writes temp.mp3 file
-        """
-        head_listener = HeadListen(self.audio_filename)
-        head_listener.listener()
+        message = {
+            "role": "user",
+            "content": textmessage
+        }
+        buffer = ""
+        tts_threads = []
+        for part in self.llama.chat(message):
+            buffer += part
+            # Split the response into chunks of 50 or more characters, ensuring each chunk ends with whitespace
+            while len(buffer) >= 100:
+                cutoff = buffer.rfind(' ', 0, 100)
+                cutoff = cutoff if cutoff != -1 else 100
+                tts_threads.append(threading.Thread(target = passed_function, args = (buffer[:cutoff].rstrip(),)))
+                tts_threads[-1].start()
+                buffer = buffer[cutoff:].lstrip()
+        if buffer:
+            tts_threads.append(threading.Thread(target = passed_function, args = (buffer,))) 
+            tts_threads[-1].start()
+        for th in tts_threads:
+            th.join()
+        # passed_function(response)
+    def run_all(self):
+        # transcribed_text = self.transcribe()
+        transcribed_text = "Расскажи мне анекдот про сталкера в пару предложений"
+        print("Transcribed:", transcribed_text)
+        # self.tts(transcribed_text)
+        print("Generated:")
+        asyncio.run(self.send_prompt(transcribed_text, self.tts))
+        print("="*40)
     
-    def text_to_speech(self, text, thread_id):
-        response = self.client.audio.speech.create(
-            model="tts-1",
-            voice="onyx",
-            input=text,
-        )
-         # Define output file path
-        output_file = os.path.join("outputs", f"{thread_id}.mp3")
-        response.stream_to_file(output_file)
-        self.output_counter += 1
+    def stop(self):
+        asyncio.run(self.send_prompt("/bye"))
+        
+        
